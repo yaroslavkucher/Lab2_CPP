@@ -68,10 +68,30 @@ void policy_all_of(const std::vector<int>& vec, ExecPolicy&& policy)
 	print_policy_time(policy_name<ExecPolicy>(), duration);
 }
 
-/*std::chrono::duration<double, std::milli> parallel_all_of(const std::vector<int>& vec, int k)
+bool parallel_all_of(const std::vector<int>& vec, int k)
 {
+	size_t vecSize = vec.size();
+	size_t blockSize = vecSize / k;
+	std::vector<std::future<bool>> futures;
+	for (int i = 0; i < k; ++i)
+	{
+		size_t startIndx = i * blockSize;
+		size_t endIndx = (i + 1) * blockSize;
+		if (i == k - 1)
+		{
+			endIndx = vecSize;
+		}
+		futures.push_back(std::async(std::launch::async, [&vec, startIndx, endIndx]() {
+			return std::all_of(vec.begin() + startIndx, vec.begin() + endIndx, pred);
+			}));
+	}
 
-}*/
+	for (auto& f : futures)
+	{
+		if (!f.get()) return false;
+	}
+	return true;
+}
 
 int main()
 {
@@ -99,23 +119,26 @@ int main()
 		policy_all_of(seqOfRandomNumbers, std::execution::par);
 		policy_all_of(seqOfRandomNumbers, std::execution::par_unseq);
 		std::cout << std::string(53, '-') << std::endl
-			<< std::format("|{:^25}|{:^25}|", "K", "Duration") << std::endl;
-		auto best_duration = std::chrono::duration<double, std::milli>::max().count();
+			<< std::format("|{:^25}|{:^25}|", "K", "Duration, ms") << std::endl;
+		std::chrono::duration<double, std::milli> best_duration = std::chrono::duration<double, std::milli>::max();
 		int K = 1;
-		for (int k = 1; k <= std::thread::hardware_concurrency() * 2; k = k * 2)
+		for (int k = 2; k <= std::thread::hardware_concurrency() * 2; k = k + 2)
 		{
-			auto duration = 5;/*parallel_all_of(seqOfRandomNumbers, k);*/
+			auto start = std::chrono::high_resolution_clock::now();
+			parallel_all_of(seqOfRandomNumbers, k);
+			auto end = std::chrono::high_resolution_clock::now();
+			std::chrono::duration<double, std::milli> duration = end - start;
 			if (duration < best_duration)
 			{
 				best_duration = duration;
 				K = k;
 			}
 			std::cout << std::string(53, '-') << std::endl
-				<< std::format("|{:^25}|{:^25}|", k, std::to_string(duration)+"ms") << std::endl;
+				<< std::format("|{:^25}|{:^25}|", k, duration) << std::endl;
 		}
 		std::cout << std::string(53, '-') << std::endl;
 		std::cout << "The best performance is achieved with " 
-			<< K << " part(s) - this is " << best_duration << " ms." << std::endl;
+			<< K << " part(s) - this is " << best_duration << std::endl;
 		std::cout << std::endl << ':' << std::string(70, '~') << ':' << std::endl;
 	}
 	return 0;
