@@ -19,4 +19,8 @@
       <Filter>Resource Files</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="output_Od.txt" />
+    <Text Include="output_O2.txt" />
+  </ItemGroup>
 </Project>

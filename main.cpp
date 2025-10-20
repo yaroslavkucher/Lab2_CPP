@@ -8,20 +8,21 @@
 #include <string>
 #include <format>
 #include <future>
+#include <fstream>
 
-void general_info()
+void general_info(std::ostream& out)
 {
-	std::cout << std::endl << ':' << std::string(70, '~') << ':' << std::endl;
-	std::cout << std::format(":{:^70}:", "The author of this program is Yaroslav Kucher K-27") << std::endl;
-	std::cout << std::format(":{:^70}:", "The program measures the time taken by the std::all_of algorithm.") << std::endl;
-	std::cout << std::format(":{:^70}:", "It tests different execution policies on vectors of random integers.") << std::endl;
-	std::cout << std::format(":{:^70}:", "Computer has " + std::to_string(std::thread::hardware_concurrency()) + " cores.") << std::endl;
-	std::cout << ':' << std::string(70, '~')<< ':'  << std::endl << std::endl;
+	out << std::endl << ':' << std::string(70, '~') << ':' << std::endl;
+	out << std::format(":{:^70}:", "The author of this program is Yaroslav Kucher K-27") << std::endl;
+	out << std::format(":{:^70}:", "The program measures the time taken by the std::all_of algorithm.") << std::endl;
+	out << std::format(":{:^70}:", "It tests different execution policies on vectors of random integers.") << std::endl;
+	out << std::format(":{:^70}:", "Computer has " + std::to_string(std::thread::hardware_concurrency()) + " cores.") << std::endl;
+	out << ':' << std::string(70, '~')<< ':'  << std::endl << std::endl;
 }
 
-void print_policy_time(std::string policy, std::chrono::duration<double, std::milli> duration)
+void print_policy_time(std::string policy, std::chrono::duration<double, std::milli> duration, std::ostream& out)
 {
-	std::cout << "Policy: " << policy << ", Time taken: " << duration.count() << " ms" << std::endl;
+	out << "Policy: " << policy << ", Time taken: " << duration.count() << " ms" << std::endl;
 }
 
 bool pred(int x)
@@ -33,7 +34,7 @@ bool pred(int x)
 	return true;
 }
 
-void policy_all_of(const std::vector<int>& vec)
+void policy_all_of(const std::vector<int>& vec, std::ostream& out)
 {
 
 	auto start = std::chrono::high_resolution_clock::now();
@@ -41,7 +42,7 @@ void policy_all_of(const std::vector<int>& vec)
 	auto end = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double, std::milli> duration = end - start;
 
-	print_policy_time("No policy", duration);
+	print_policy_time("No policy", duration, out);
 }
 
 template<typename ExecPolicy>
@@ -57,7 +58,7 @@ constexpr const std::string policy_name() {
 }
 
 template<typename ExecPolicy>
-void policy_all_of(const std::vector<int>& vec, ExecPolicy&& policy)
+void policy_all_of(const std::vector<int>& vec, ExecPolicy&& policy, std::ostream& out)
 {
 
 	auto start = std::chrono::high_resolution_clock::now();
@@ -65,7 +66,7 @@ void policy_all_of(const std::vector<int>& vec, ExecPolicy&& policy)
 	auto end = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double, std::milli> duration = end - start;
 
-	print_policy_time(policy_name<ExecPolicy>(), duration);
+	print_policy_time(policy_name<ExecPolicy>(), duration, out);
 }
 
 bool parallel_all_of(const std::vector<int>& vec, int k)
@@ -95,34 +96,31 @@ bool parallel_all_of(const std::vector<int>& vec, int k)
 
 int main()
 {
+	std::ofstream out("output_Od.txt");
 	std::mt19937 randomGenerator(std::random_device{}());
 	std::uniform_int_distribution<int> distribution(0, 100);
 	std::vector<int> sizes = {100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000};
 	int n = 1;
-	general_info();
+	general_info(out);
 	for(auto vecSize: sizes)
 	{
-		std::cout << "Experiment #" << n++ << ":" << std::endl
+		out << "Experiment #" << n++ << ":" << std::endl
 				  << "vector size = " << vecSize << std::endl;
 		std::vector<int> seqOfRandomNumbers(vecSize);
 		for (auto& el : seqOfRandomNumbers)
 		{
 			el = distribution(randomGenerator);
 		}
-		/*for (auto& el : seqOfRandomNumbers)
-		{
-			std::cout << el << " ";
-		}*/
-		policy_all_of(seqOfRandomNumbers);
-		policy_all_of(seqOfRandomNumbers, std::execution::seq);
-		policy_all_of(seqOfRandomNumbers, std::execution::unseq);
-		policy_all_of(seqOfRandomNumbers, std::execution::par);
-		policy_all_of(seqOfRandomNumbers, std::execution::par_unseq);
-		std::cout << std::string(53, '-') << std::endl
+		policy_all_of(seqOfRandomNumbers, out);
+		policy_all_of(seqOfRandomNumbers, std::execution::seq, out);
+		policy_all_of(seqOfRandomNumbers, std::execution::unseq, out);
+		policy_all_of(seqOfRandomNumbers, std::execution::par, out);
+		policy_all_of(seqOfRandomNumbers, std::execution::par_unseq, out);
+		out << std::string(53, '-') << std::endl
 			<< std::format("|{:^25}|{:^25}|", "K", "Duration, ms") << std::endl;
 		std::chrono::duration<double, std::milli> best_duration = std::chrono::duration<double, std::milli>::max();
 		int K = 1;
-		for (int k = 2; k <= std::thread::hardware_concurrency() * 2; k = k + 2)
+		for (int k = 1; k <= std::thread::hardware_concurrency() * 2; ++k)
 		{
 			auto start = std::chrono::high_resolution_clock::now();
 			parallel_all_of(seqOfRandomNumbers, k);
@@ -133,13 +131,15 @@ int main()
 				best_duration = duration;
 				K = k;
 			}
-			std::cout << std::string(53, '-') << std::endl
+			out << std::string(53, '-') << std::endl
 				<< std::format("|{:^25}|{:^25}|", k, duration) << std::endl;
 		}
-		std::cout << std::string(53, '-') << std::endl;
-		std::cout << "The best performance is achieved with " 
+		out << std::string(53, '-') << std::endl;
+		double ratio = static_cast<double>(K) / std::thread::hardware_concurrency();
+		out << "The best performance is achieved with " 
 			<< K << " part(s) - this is " << best_duration << std::endl;
-		std::cout << std::endl << ':' << std::string(70, '~') << ':' << std::endl;
+		out << "K / Threads ratio = " << ratio << std::endl;
+		out << std::endl << ':' << std::string(70, '~') << ':' << std::endl;
 	}
 	return 0;
 }
